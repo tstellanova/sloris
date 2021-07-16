@@ -1,22 +1,41 @@
-/* Tinker
- * This is a simple application to read and toggle pins on a Particle device.
- * For the extended version of the Tinker app supporting more pins, see
- * https://github.com/particle-iot/device-os/blob/develop/user/applications/tinker/application.cpp
+/**
+ *  Demo application for power-conserving remote condition monitoring
  */
 
-#include "Particle.h"
+#include <Particle.h>
+#include <Grove_ChainableLED.h>
+#include <Grove_Temperature_And_Humidity_Sensor.h>
 
 SYSTEM_THREAD(ENABLED);
-SYSTEM_MODE(SEMI_AUTOMATIC);
+SYSTEM_MODE(MANUAL);
 
+SerialLogHandler logHandler(115200, LOG_LEVEL_WARN,
+    {
+      {"app", LOG_LEVEL_INFO},
+      {"system.nm", LOG_LEVEL_INFO},
+    });
 
+const uint8_t DHT_INPUT_PIN = (A2);
+const uint8_t I2C1_SCK_PIN = (D2);
+const uint8_t I2C1_SDA_PIN = (D3);
+const uint8_t NUM_LEDS  = 1;
+
+/// Define the i2c bus used for the LEDs
+ChainableLED led_chain(I2C1_SCK_PIN, I2C1_SDA_PIN, NUM_LEDS);
+
+DHT dht(DHT_INPUT_PIN);
+
+float last_temp = 0;
+float last_humidity = 0;
+
+ 
 /* Function prototypes -------------------------------------------------------*/
 int tinkerDigitalRead(String pin);
 int tinkerDigitalWrite(String command);
 int tinkerAnalogRead(String pin);
 int tinkerAnalogWrite(String command);
-
-SerialLogHandler logHandler(LOG_LEVEL_ALL);
+double readTemperature();
+double readHumidity();
 
 /* This function is called once at start up ----------------------------------*/
 void setup()
@@ -31,21 +50,119 @@ void setup()
         delay(1000);
     }
 	
-
-	Cellular.connect();
+	dht.begin();
+	led_chain.init();
 	
 	//Register all the Tinker functions
-	Particle.function("digitalread", tinkerDigitalRead);
-	Particle.function("digitalwrite", tinkerDigitalWrite);
-	Particle.function("analogread", tinkerAnalogRead);
-	Particle.function("analogwrite", tinkerAnalogWrite);
+	// Particle.function("digitalread", tinkerDigitalRead);
+	// Particle.function("digitalwrite", tinkerDigitalWrite);
+	// Particle.function("analogread", tinkerAnalogRead);
+	// Particle.function("analogwrite", tinkerAnalogWrite);
+
+	// Particle.variable("readTemperature", readTemperature);
+	Particle.variable("readHumidity", readHumidity);
+
+}
+
+
+double readTemperature() {
+	return (double)last_temp;
+}
+
+double readHumidity() {
+	return (double)last_humidity;
+}
+
+
+static void read_dht() {
+
+	float cur_temp = dht.getTempCelcius();
+	float cur_hum = dht.getHumidity();
+
+	Log.info("Temp: %f Humid: %f", cur_temp, cur_hum);
+	if (!isnanf(cur_temp)) { last_temp = cur_temp; }
+	if (!isnanf(cur_hum)) { last_humidity = cur_hum; }
+}
+
+
+static SystemSleepConfiguration sleep_cfg = {};
+
+// control how long we sleep based on data collection and publication config
+static void sleep_control(uint32_t sleep_ms) {
+  sleep_cfg.mode(SystemSleepMode::ULTRA_LOW_POWER)
+  	// keep network awake and able to awake MCU with eg Particle.variable calls
+	.network(NETWORK_INTERFACE_CELLULAR) 
+	// keep modem active while sleeping, but don't wake on data received from cloud
+	// .network(NETWORK_INTERFACE_CELLULAR, SystemSleepNetworkFlag::INACTIVE_STANDBY) 
+	// Wake on battery fuel gauge event, eg battery unplugged 
+    // .gpio(LOW_BAT_UC, FALLING) 
+    .duration(sleep_ms); //ms
+  
+  uint32_t sleep_start = millis();
+  Log.info("sleep %lu ms", sleep_ms);
+  SystemSleepResult sleep_res = System.sleep(sleep_cfg);
+  SystemSleepWakeupReason wake_reason = sleep_res.wakeupReason();
+  uint32_t sleep_actual = millis() - sleep_start;
+  // allow some time for usb serial to wake from sleep
+  Serial.begin();
+  delay(3000);
+  Log.info("sleep_actual: %lu", sleep_actual);
+
+  switch (wake_reason) {
+	case SystemSleepWakeupReason::BY_RTC:
+		Log.info("wakeup on RTC");
+		break;
+    case SystemSleepWakeupReason::BY_GPIO:
+      Log.info("GPIO wakeup pin: %u", sleep_res.wakeupPin());
+      break;
+	case SystemSleepWakeupReason::BY_NETWORK:
+		Log.info("Network wakeup");
+		break;
+
+    case SystemSleepWakeupReason::BY_ADC: 
+    default: {
+      Log.info("wakeup: %u", (uint16_t)wake_reason);
+    }
+    break;
+  }
+}
+
+static bool publish_data() {
+	String data_json = String::format("{ \"temp\": %0.3f, \"hum\": %0.3f }", last_temp, last_humidity);
+	if (!Particle.publish("blob", data_json, PRIVATE | WITH_ACK)) {
+		return false;
+	}
+	return true;
 }
 
 /* This function loops forever --------------------------------------------*/
 void loop()
 {
-	//This will run in a loop
-	delay(3000);
+	led_chain.setColorRGB(0, 8,0,0);
+	Log.info("loopstart");
+	if (!Particle.connected()) {
+		Log.warn("reconnect");
+		Particle.connect(); //start connection
+	}
+	read_dht();
+	uint8_t red_val = 0;
+	uint8_t green_Val = (uint8_t)(last_humidity*1.28f);
+	uint8_t blue_val = (uint8_t)(last_humidity*2.55f);  /// (humidity/100) * 255;
+	led_chain.setColorRGB(0, red_val, green_Val, blue_val);
+
+	for (int i = 0; i < 45; i++) {
+		if (Particle.connected()) { break; }
+		Log.info("wait... %d",i);
+		delay(1000);
+	}
+
+	if (publish_data()) {
+		sleep_control(30000);
+	}
+	else {
+		Log.warn("pub failed");
+		delay(2000);
+	}
 }
 
 /*******************************************************************************
@@ -73,6 +190,7 @@ int tinkerDigitalRead(String pin)
 		pinMode(pinNumber+10, INPUT_PULLDOWN);
 		return digitalRead(pinNumber+10);
 	}
+	
 	return -2;
 }
 
