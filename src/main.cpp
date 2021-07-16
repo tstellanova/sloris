@@ -7,7 +7,7 @@
 #include <Grove_Temperature_And_Humidity_Sensor.h>
 
 SYSTEM_THREAD(ENABLED);
-SYSTEM_MODE(MANUAL);
+SYSTEM_MODE(SEMI_AUTOMATIC);
 
 SerialLogHandler logHandler(115200, LOG_LEVEL_WARN,
     {
