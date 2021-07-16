@@ -1,6 +1,11 @@
-# tinkertime
+# Sloris
 
-A Particle project named tinkertime
+A Particle project named sloris.
+
+This project demonstrates how to do battery-conserving remote condition monitoring. 
+The application sleeps periodically, waking up via the real time clock (RTC) 
+or via remote (cloud) polling 
+of one of its sensor values. 
 
 ## Welcome to your project!
 
@@ -12,7 +17,7 @@ Anything that is in this folder when you compile your project will be sent to ou
 
 If your application contains multiple files, they should all be included in the `src` folder. If your firmware depends on Particle libraries, those dependencies are specified in the `project.properties` file referenced below.
 
-#### ```.ino``` file:
+#### ```.cpp``` file:
 This file is the firmware that will run as the primary application on your Particle device. It contains a `setup()` and `loop()` function, and can be written in Wiring or C/C++. For more information about using the Particle firmware API to create firmware for your Particle device, refer to the [Firmware Reference](https://docs.particle.io/reference/firmware/) section of the Particle documentation.
 
 #### ```project.properties``` file:  
