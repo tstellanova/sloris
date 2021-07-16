@@ -7,9 +7,30 @@ The application sleeps periodically, waking up via the real time clock (RTC)
 or via remote (cloud) polling 
 of one of its sensor values. 
 
-## Welcome to your project!
+## Cloud Build with the Particle CLI
 
-Every new Particle project is composed of 3 important elements that you'll see have been created in your project directory for tinkertime.
+You can use the command-line 
+[Particle CLI](https://docs.particle.io/tutorials/developer-tools/cli/)
+to perform a cloud build of the application
+ 
+`particle compile --target 2.1.0 boron --saveTo sloris_boron.bin`
+
+You can also use the CLI to flash the device using dfu:
+
+`particle usb dfu && particle flash --usb sloris_boron.bin`
+
+## Import into a Workbench Project
+
+You can edit, build, flash, and debug this project with .
+[Particle Workbench](https://docs.particle.io/tutorials/developer-tools/workbench/)
+Use the `Particle: Import Project` command in a Workbench window,
+Open -> and select the `project.properties` file in the same directory as this README.
+This will create a new vscode project and automatically import all of this
+project's dependencies into `/lib`. 
+
+## Project structure
+
+Every new Particle project is composed of 3 important elements .
 
 #### ```/src``` folder:  
 This is the source folder that contains the firmware files for your project. It should *not* be renamed. 
@@ -31,10 +52,3 @@ If you would like add additional files to your application, they should be added
 #### Projects with external libraries
 If your project includes a library that has not been registered in the Particle libraries system, you should create a new folder named `/lib/<libraryname>/src` under `/<project dir>` and add the `.h`, `.cpp` & `library.properties` files for your library there. Read the [Firmware Libraries guide](https://docs.particle.io/guide/tools-and-features/libraries/) for more details on how to develop libraries. Note that all contents of the `/lib` folder and subfolders will also be sent to the Cloud for compilation.
 
-## Compiling your project
-
-When you're ready to compile your project, make sure you have the correct Particle device target selected and run `particle compile <platform>` in the CLI or click the Compile button in the Desktop IDE. The following files in your project folder will be sent to the compile service:
-
-- Everything in the `/src` folder, including your `.ino` application file
-- The `project.properties` file for your project
-- Any libraries stored under `lib/<libraryname>/src`
