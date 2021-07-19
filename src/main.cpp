@@ -4,14 +4,13 @@
 
 #include <Particle.h>
 
-#include "Adafruit_BME280.h"
+// #include "Adafruit_BME280.h"
 #include "DHT22Gen3_RK.h"
 
 #include "ChainableLED.h"
 #include "Ubidots.h"
 
-// #include "Adafruit_VEML6070.h"
-
+#include "Adafruit_VEML6070.h"
 
 Adafruit_VEML6070 uv_sensor;
 
