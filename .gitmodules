@@ -1,0 +1,12 @@
+[submodule "lib/Ubidots"]
+	path = lib/Ubidots
+	url = https://github.com/ubidots/ubidots-particle
+[submodule "lib/Grove_ChainableLED"]
+	path = lib/Grove_ChainableLED
+	url = https://github.com/Seeed-Studio/Grove_ChainableLED
+[submodule "lib/bme280"]
+	path = lib/bme280
+	url = https://github.com/mhaack/Adafruit_BME280_Library
+[submodule "lib/dht22rk"]
+	path = lib/dht22rk
+	url = https://github.com/rickkas7/DHT22Gen3_RK

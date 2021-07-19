@@ -3,8 +3,21 @@
  */
 
 #include <Particle.h>
-#include <Grove_ChainableLED.h>
-#include <Grove_Temperature_And_Humidity_Sensor.h>
+
+#include "Adafruit_BME280.h"
+#include "DHT22Gen3_RK.h"
+
+#include "ChainableLED.h"
+#include "Ubidots.h"
+
+// #include "Adafruit_VEML6070.h"
+
+
+Adafruit_VEML6070 uv_sensor;
+
+const char* WEBHOOK_NAME = "ubidota";
+constexpr char* UBD_PROTO = "webhook";
+Ubidots ubidots(UBD_PROTO, UBI_PARTICLE);
 
 SYSTEM_THREAD(ENABLED);
 SYSTEM_MODE(MANUAL);
@@ -16,18 +29,19 @@ SerialLogHandler logHandler(115200, LOG_LEVEL_WARN,
     });
 
 const uint8_t DHT_INPUT_PIN = (A2);
-const uint8_t I2C1_SCK_PIN = (D2);
-const uint8_t I2C1_SDA_PIN = (D3);
+const uint8_t EXTLED_CLOCK_PIN = (D2);
+const uint8_t EXTLED_DATA_PIN = (D3);
+
 const uint8_t NUM_LEDS  = 1;
 
 /// Define the i2c bus used for the LEDs
-ChainableLED led_chain(I2C1_SCK_PIN, I2C1_SDA_PIN, NUM_LEDS);
+ChainableLED led_chain(EXTLED_CLOCK_PIN, EXTLED_DATA_PIN, NUM_LEDS);
 
 DHT dht(DHT_INPUT_PIN);
 
 float last_temp = 0;
 float last_humidity = 0;
-
+uint16_t last_uv = 0;
  
 /* Function prototypes -------------------------------------------------------*/
 int tinkerDigitalRead(String pin);
@@ -50,6 +64,10 @@ void setup()
         delay(1000);
     }
 	
+	ubidots.setDebug(true);
+
+	uv_sensor.begin(VEML6070_2_T);
+
 	dht.begin();
 	led_chain.init();
 	
@@ -127,33 +145,48 @@ static void sleep_control(uint32_t sleep_ms) {
   }
 }
 
+constexpr char* TEMPERATURE_TOPIC = "temp";
+constexpr char* HUMIDITY_TOPIC = "humidity";
+constexpr char* UV_TOPIC = "uv";
+
 static bool publish_data() {
-	String data_json = String::format("{ \"temp\": %0.3f, \"hum\": %0.3f }", last_temp, last_humidity);
-	if (!Particle.publish("blob", data_json, PRIVATE | WITH_ACK)) {
-		return false;
-	}
-	return true;
+	
+	ubidots.add(TEMPERATURE_TOPIC, last_temp); 
+    ubidots.add(HUMIDITY_TOPIC, last_humidity);
+	ubidots.add(UV_TOPIC, last_uv);
+
+	// Will use Particle webhook to send data
+ 	return ubidots.send(WEBHOOK_NAME, PUBLIC | WITH_ACK); 
 }
 
 /* This function loops forever --------------------------------------------*/
 void loop()
 {
-	led_chain.setColorRGB(0, 8,0,0);
+	led_chain.setColorRGB(0, 0,16,0);
 	Log.info("loopstart");
 	if (!Particle.connected()) {
 		Log.warn("reconnect");
 		Particle.connect(); //start connection
 	}
 	read_dht();
-	uint8_t red_val = 0;
-	uint8_t green_Val = (uint8_t)(last_humidity*1.28f);
+	uint16_t cur_uv = uv_sensor.readUV();
+	if (65535 != cur_uv) { //invalid reading
+		last_uv = cur_uv;
+	}
+
+	uint8_t red_val = (uint8_t)(last_temp*2.55f); //( * 255/100)
+	uint8_t green_Val = 0;
 	uint8_t blue_val = (uint8_t)(last_humidity*2.55f);  /// (humidity/100) * 255;
 	led_chain.setColorRGB(0, red_val, green_Val, blue_val);
 
-	for (int i = 0; i < 45; i++) {
+	for (int i = 0; i < 30; i++) {
 		if (Particle.connected()) { break; }
 		Log.info("wait... %d",i);
 		delay(1000);
+	}
+	if (!Particle.connected()) {
+		// In this app we don't attempt to send data if we can't connect
+		return;
 	}
 
 	if (publish_data()) {
