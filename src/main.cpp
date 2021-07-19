@@ -4,19 +4,20 @@
 
 #include <Particle.h>
 
-// #include "Adafruit_BME280.h"
-#include "DHT22Gen3_RK.h"
 
 #include "ChainableLED.h"
 #include "Ubidots.h"
 
+#include "Adafruit_BME280.h"
+#include "Air_Quality_Sensor.h"
+// UV sensor
 #include "Adafruit_VEML6070.h"
 
 Adafruit_VEML6070 uv_sensor;
 
-const char* WEBHOOK_NAME = "ubidota";
-constexpr char* UBD_PROTO = "webhook";
-Ubidots ubidots(UBD_PROTO, UBI_PARTICLE);
+const char *WEBHOOK_NAME = "ubidota";
+constexpr char UBD_PROTO[] = "webhook";
+Ubidots ubidots((char*)UBD_PROTO, UBI_PARTICLE);
 
 SYSTEM_THREAD(ENABLED);
 SYSTEM_MODE(MANUAL);
@@ -27,19 +28,28 @@ SerialLogHandler logHandler(115200, LOG_LEVEL_WARN,
       {"system.nm", LOG_LEVEL_INFO},
     });
 
-const uint8_t DHT_INPUT_PIN = (A2);
 const uint8_t EXTLED_CLOCK_PIN = (D2);
 const uint8_t EXTLED_DATA_PIN = (D3);
 
 const uint8_t NUM_LEDS  = 1;
 
+
+const uint16_t AQS_PIN = (A2);
+const uint16_t DUST_SENSOR_PIN = (D4);
+// #define SENSOR_READING_INTERVAL 30000
+
+AirQualitySensor aqSensor(AQS_PIN);
+Adafruit_BME280 bme;
+
 /// Define the i2c bus used for the LEDs
 ChainableLED led_chain(EXTLED_CLOCK_PIN, EXTLED_DATA_PIN, NUM_LEDS);
 
-DHT dht(DHT_INPUT_PIN);
+
+// DHT dht(DHT_INPUT_PIN);
 
 float last_temp = 0;
 float last_humidity = 0;
+float last_airpressure = 0;
 uint16_t last_uv = 0;
  
 /* Function prototypes -------------------------------------------------------*/
@@ -63,11 +73,23 @@ void setup()
         delay(1000);
     }
 	
+	Wire.begin();
+
 	ubidots.setDebug(true);
+
+	// // Configure the dust sensor pin as an input
+	// pinMode(DUST_SENSOR_PIN, INPUT);
+
+	// if (!aqSensor.init()) {
+	// 	Log.error("aq sensor init failed");
+	// }
+
+	if (!bme.begin(BME280_ADDRESS)) {
+		Log.error("BME280 init failed");
+	}
 
 	uv_sensor.begin(VEML6070_2_T);
 
-	dht.begin();
 	led_chain.init();
 	
 	//Register all the Tinker functions
@@ -91,14 +113,12 @@ double readHumidity() {
 }
 
 
-static void read_dht() {
 
-	float cur_temp = dht.getTempCelcius();
-	float cur_hum = dht.getHumidity();
-
-	Log.info("Temp: %f Humid: %f", cur_temp, cur_hum);
-	if (!isnanf(cur_temp)) { last_temp = cur_temp; }
-	if (!isnanf(cur_hum)) { last_humidity = cur_hum; }
+static void getBMEValues()
+{
+	last_temp =  bme.readTemperature();
+	last_humidity = bme.readHumidity();
+	last_airpressure = bme.readPressure() / 100.0F;
 }
 
 
@@ -144,15 +164,18 @@ static void sleep_control(uint32_t sleep_ms) {
   }
 }
 
-constexpr char* TEMPERATURE_TOPIC = "temp";
-constexpr char* HUMIDITY_TOPIC = "humidity";
-constexpr char* UV_TOPIC = "uv";
+constexpr char TEMPERATURE_TOPIC[] = "temp";
+constexpr char AIR_PRESSURE_TOPIC[] = "press";
+constexpr char HUMIDITY_TOPIC[] = "humidity";
+constexpr char UV_TOPIC[] = "uv";
+
 
 static bool publish_data() {
 	
-	ubidots.add(TEMPERATURE_TOPIC, last_temp); 
-    ubidots.add(HUMIDITY_TOPIC, last_humidity);
-	ubidots.add(UV_TOPIC, last_uv);
+	ubidots.add((char*)TEMPERATURE_TOPIC, last_temp); 
+	ubidots.add((char*)AIR_PRESSURE_TOPIC, last_airpressure); 
+    ubidots.add((char*)HUMIDITY_TOPIC, last_humidity);
+	ubidots.add((char*)UV_TOPIC, last_uv);
 
 	// Will use Particle webhook to send data
  	return ubidots.send(WEBHOOK_NAME, PUBLIC | WITH_ACK); 
@@ -167,16 +190,23 @@ void loop()
 		Log.warn("reconnect");
 		Particle.connect(); //start connection
 	}
-	read_dht();
+
 	uint16_t cur_uv = uv_sensor.readUV();
 	if (65535 != cur_uv) { //invalid reading
 		last_uv = cur_uv;
 	}
 
-	uint8_t red_val = (uint8_t)(last_temp*2.55f); //( * 255/100)
-	uint8_t green_Val = 0;
-	uint8_t blue_val = (uint8_t)(last_humidity*2.55f);  /// (humidity/100) * 255;
-	led_chain.setColorRGB(0, red_val, green_Val, blue_val);
+    getBMEValues();
+
+	if (last_temp > 0 | last_humidity > 0) {
+		uint8_t red_val = (uint8_t)(last_temp*2.55f); //( * 255/100)
+		uint8_t green_Val = 0;
+		uint8_t blue_val = (uint8_t)(last_humidity*2.55f);  /// (humidity/100) * 255;
+		led_chain.setColorRGB(0, red_val, green_Val, blue_val);
+	}
+	else {
+		led_chain.setColorRGB(0, 32,0,0);
+	}
 
 	for (int i = 0; i < 30; i++) {
 		if (Particle.connected()) { break; }
@@ -189,7 +219,7 @@ void loop()
 	}
 
 	if (publish_data()) {
-		sleep_control(30000);
+		sleep_control(10000);
 	}
 	else {
 		Log.warn("pub failed");

@@ -7,6 +7,9 @@
 [submodule "lib/bme280"]
 	path = lib/bme280
 	url = https://github.com/mhaack/Adafruit_BME280_Library
-[submodule "lib/dht22rk"]
-	path = lib/dht22rk
-	url = https://github.com/rickkas7/DHT22Gen3_RK
+[submodule "lib/ada_veml6070"]
+	path = lib/ada_veml6070
+	url = https://github.com/hl68fx/Adafruit_VEML6070
+[submodule "lib/grove_aq"]
+	path = lib/grove_aq
+	url = https://github.com/bsatrom/Grove_Air_quality_Sensor
