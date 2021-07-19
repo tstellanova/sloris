@@ -185,7 +185,6 @@ static bool publish_data() {
 void loop()
 {
 	led_chain.setColorRGB(0, 0,16,0);
-	Log.info("loopstart");
 	if (!Particle.connected()) {
 		Log.warn("reconnect");
 		Particle.connect(); //start connection
