@@ -10,3 +10,6 @@
 [submodule "lib/grove_aq"]
 	path = lib/grove_aq
 	url = https://github.com/bsatrom/Grove_Air_quality_Sensor
+[submodule "lib/veml6070"]
+	path = lib/veml6070
+	url = https://github.com/tstellanova/Adafruit_VEML6070
