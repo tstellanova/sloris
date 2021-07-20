@@ -28,30 +28,42 @@ SerialLogHandler logHandler(115200, LOG_LEVEL_WARN,
       {"system.nm", LOG_LEVEL_INFO},
     });
 
-const uint8_t EXTLED_CLOCK_PIN = (D2);
-const uint8_t EXTLED_DATA_PIN = (D3);
-
-const uint8_t NUM_LEDS  = 1;
+// External status LED pins
+const uint16_t EXTLED_CLOCK_PIN = (D2);
+const uint16_t EXTLED_DATA_PIN = (D3);
+const uint8_t NUM_EXT_LEDS  = 1;
 
 
 const uint16_t AQS_PIN = (A2);
 const uint16_t DUST_SENSOR_PIN = (D4);
-// #define SENSOR_READING_INTERVAL 30000
+// how long to collect dust readings before recalculating
+const uint32_t DUST_SENSOR_WINDOW_MS  = 30000; 
 
-AirQualitySensor aqSensor(AQS_PIN);
+
+// Sensor for volatile organic compounds, carbon monoxide, and so on.
+AirQualitySensor voc_sensor(AQS_PIN);
+
+// Air pressure, temperature, humidity sensor
 Adafruit_BME280 bme;
 
-/// Define the i2c bus used for the LEDs
-ChainableLED led_chain(EXTLED_CLOCK_PIN, EXTLED_DATA_PIN, NUM_LEDS);
+// Define the digital IO pins used for external LED
+ChainableLED led_chain(EXTLED_CLOCK_PIN, EXTLED_DATA_PIN, NUM_EXT_LEDS);
 
 
-// DHT dht(DHT_INPUT_PIN);
+static float last_temp = 0;
+static float last_humidity = 0;
+static float last_airpressure = 0;
+static uint32_t last_pth_read = 0;
+static uint16_t last_uv = 0;
+static uint32_t last_dust_recalc_ms = 0;
+static uint32_t total_window_lpo = 0;
+static uint32_t last_known_window_lpo = 0;
+static float dust_ratio = 0;
+static float dust_concentration = 0;
 
-float last_temp = 0;
-float last_humidity = 0;
-float last_airpressure = 0;
-uint16_t last_uv = 0;
- 
+static SystemSleepConfiguration sleep_cfg = {};
+
+
 /* Function prototypes -------------------------------------------------------*/
 int tinkerDigitalRead(String pin);
 int tinkerDigitalWrite(String command);
@@ -77,12 +89,12 @@ void setup()
 
 	ubidots.setDebug(true);
 
-	// // Configure the dust sensor pin as an input
-	// pinMode(DUST_SENSOR_PIN, INPUT);
+	// Configure the dust sensor pin as an input
+	pinMode(DUST_SENSOR_PIN, INPUT);
 
-	// if (!aqSensor.init()) {
-	// 	Log.error("aq sensor init failed");
-	// }
+	if (!voc_sensor.init()) {
+		Log.error("aq sensor init failed");
+	}
 
 	if (!bme.begin(BME280_ADDRESS)) {
 		Log.error("BME280 init failed");
@@ -113,16 +125,52 @@ double readHumidity() {
 }
 
 
+// Read ultraviolet light sensor
+static void read_uv_sensor() {
+	uint16_t cur_uv = uv_sensor.readUV();
+	if (65535 != cur_uv) { //invalid reading
+		last_uv = cur_uv;
+	}
+}
 
-static void getBMEValues()
+// Read Pressure, Temperature, Humidity sensor
+static void read_pth_sensor()
 {
 	last_temp =  bme.readTemperature();
 	last_humidity = bme.readHumidity();
 	last_airpressure = bme.readPressure() / 100.0F;
+	last_pth_read = millis();
+}
+
+// Read particulate (dust) sensor
+static void read_dust_sensor() {
+	// measure the length of a low pulse
+	uint32_t low_pulse_duration =  pulseIn(DUST_SENSOR_PIN, LOW);
+	// filter out zeros
+	if (low_pulse_duration > 0) {
+		total_window_lpo +=   low_pulse_duration;
+	}
+
+	// 	periodically recalculate the particulate readings
+	if ((total_window_lpo > 0) && ((millis() - last_dust_recalc_ms) > DUST_SENSOR_WINDOW_MS) ) {
+
+		dust_ratio = total_window_lpo / (DUST_SENSOR_WINDOW_MS * 10.0);// Integer percentage 0=>100
+		float ratio2 = dust_ratio * dust_ratio;
+		dust_concentration = ratio2*(1.1 * dust_ratio - 3.8) + (520 * dust_ratio) + 0.62; // using spec sheet curve
+		last_known_window_lpo = total_window_lpo;
+
+		Log.trace("LPO: %lu", last_known_window_lpo);
+		Log.trace("Dust Ratio: %f%%", dust_ratio);
+		Log.trace("dust_concentration: %f pcs/L", dust_concentration);
+
+		total_window_lpo = 0;
+		last_dust_recalc_ms = millis();
+	}
+
+
 }
 
 
-static SystemSleepConfiguration sleep_cfg = {};
 
 // control how long we sleep based on data collection and publication config
 static void sleep_control(uint32_t sleep_ms) {
@@ -177,30 +225,34 @@ static bool publish_data() {
     ubidots.add((char*)HUMIDITY_TOPIC, last_humidity);
 	ubidots.add((char*)UV_TOPIC, last_uv);
 
-	// Will use Particle webhook to send data
+	if (last_known_window_lpo > 0) {
+      ubidots.add((char*)"dust-lpo", last_known_window_lpo);
+      ubidots.add((char*)"dust-ratio", dust_ratio);
+      ubidots.add((char*)"dust-concentration", dust_concentration);
+	}
+
+	// Here we use a Particle webhook to send data to Ubidots
  	return ubidots.send(WEBHOOK_NAME, PUBLIC | WITH_ACK); 
 }
 
 /* This function loops forever --------------------------------------------*/
 void loop()
 {
-	led_chain.setColorRGB(0, 0,16,0);
+	led_chain.setColorRGB(0, 0,8,0);
+	// connect if we aren't already connected
 	if (!Particle.connected()) {
 		Log.warn("reconnect");
 		Particle.connect(); //start connection
 	}
 
-	uint16_t cur_uv = uv_sensor.readUV();
-	if (65535 != cur_uv) { //invalid reading
-		last_uv = cur_uv;
-	}
+	read_uv_sensor();
+    read_pth_sensor();
+	read_dust_sensor();
 
-    getBMEValues();
-
-	if (last_temp > 0 | last_humidity > 0) {
-		uint8_t red_val = (uint8_t)(last_temp*2.55f); //( * 255/100)
-		uint8_t green_Val = 0;
-		uint8_t blue_val = (uint8_t)(last_humidity*2.55f);  /// (humidity/100) * 255;
+	if (last_pth_read > 0) {
+		uint8_t red_val = (uint8_t)(last_temp*2.55f); //( temp  / 100)  * 255;
+		uint8_t green_Val = 16;
+		uint8_t blue_val = (uint8_t)(last_humidity*2.55f);  // (humidity/100) * 255;
 		led_chain.setColorRGB(0, red_val, green_Val, blue_val);
 	}
 	else {
