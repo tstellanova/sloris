@@ -33,7 +33,7 @@
 SYSTEM_THREAD(ENABLED);
 SYSTEM_MODE(SEMI_AUTOMATIC); 
 
-SerialLogHandler logHandler(115200, LOG_LEVEL_WARN,
+SerialLogHandler logHandler(115200, LOG_LEVEL_INFO,
     {
       {"app", LOG_LEVEL_INFO},
       {"system.nm", LOG_LEVEL_INFO},
@@ -47,7 +47,7 @@ const uint8_t NUM_EXT_LEDS  = 1;
 
 const uint16_t DUST_SENSOR_PIN = (D4);
 // how long to collect dust readings before recalculating
-const uint32_t DUST_SENSOR_WINDOW_MS  = 30000; 
+const uint32_t DUST_SENSOR_WINDOW_MS  = 10000; 
 
 
 const uint16_t AQS_PIN = (A2);
@@ -139,7 +139,7 @@ static void read_voc_sensor() {
 	if (gas_quality >= 0) {
 		last_voc_qual = gas_quality;
 		last_voc_value = voc_sensor.getValue();
-		Log.info("voc qual: %d  val: %d", last_voc_qual, last_voc_value);
+		Log.info("voc qual: %ld  val: %ld", last_voc_qual, last_voc_value);
 	}
 }
 
@@ -162,11 +162,19 @@ static void read_pht_sensor() {
 // Read particulate (dust) sensor
 static void read_dust_sensor() {
 	// measure the length of a low pulse
-	uint32_t low_pulse_duration =  pulseIn(DUST_SENSOR_PIN, LOW);
+	uint32_t low_pulse_duration = 0;
+	
+	// Log.info("begin dust read");
+
 	// filter out zeros
-	if (low_pulse_duration > 0) {
-		total_window_lpo +=   low_pulse_duration;
+	for (uint8_t count = 0; count < 3; count++) {
+		low_pulse_duration = pulseIn(DUST_SENSOR_PIN, LOW);
+		if (low_pulse_duration > 0) {
+			total_window_lpo +=   low_pulse_duration;
+			break;
+		}
 	}
+	Log.info("dust pulse: %lu", low_pulse_duration);
 
 	// 	periodically recalculate the particulate readings
 	if ((total_window_lpo > 0) && ((millis() - last_dust_recalc_ms) > DUST_SENSOR_WINDOW_MS) ) {
@@ -176,9 +184,9 @@ static void read_dust_sensor() {
 		dust_concentration = ratio2*(1.1 * dust_ratio - 3.8) + (520 * dust_ratio) + 0.62; // using spec sheet curve
 		last_known_window_lpo = total_window_lpo;
 
-		Log.trace("LPO: %lu", last_known_window_lpo);
-		Log.trace("Dust Ratio: %f%%", dust_ratio);
-		Log.trace("dust_concentration: %f pcs/L", dust_concentration);
+		Log.info("LPO: %lu", last_known_window_lpo);
+		Log.info("Dust Ratio: %f%%", dust_ratio);
+		Log.info("dust_concentration: %f pcs/L", dust_concentration);
 
 		total_window_lpo = 0;
 		last_dust_recalc_ms = millis();
@@ -243,6 +251,8 @@ static bool publish_data() {
       ubidots.add((char*)"dust-concentration", dust_concentration);
 	}
 
+	
+
 	// Here we use a Particle webhook to send data to Ubidots
 	// This webhook name must match the webhook integration created in your Particle cloud account
  	return ubidots.send((char*)"ubidota", PUBLIC | WITH_ACK); 
@@ -261,8 +271,8 @@ void loop()
 
 	// read_uv_sensor();
     read_pht_sensor();
-	read_dust_sensor();
 	read_voc_sensor();
+	read_dust_sensor();
 
 	// display a "health check" status for air quality
 	uint8_t red_val = 0, green_val = 0, blue_val = 0;;
@@ -296,7 +306,6 @@ void loop()
 		
 	led_chain.setColorRGB(0, red_val, green_val, blue_val);
 
-
 	for (int i = 0; i < 30; i++) {
 		if (Particle.connected()) { break; }
 		Log.info("wait... %d",i);
@@ -308,8 +317,8 @@ void loop()
 	}
 
 	if (publish_data()) {
-		sleep_control(10000);
-		// delay(5000);
+		// wait 5 minutes between publications as ubidots are rate-limited
+		sleep_control(300000);
 	}
 	else {
 		Log.warn("pub failed");
