@@ -20,7 +20,6 @@
  */
 #include <Particle.h>
 
-#include "ChainableLED.h"
 #include "Ubidots.h"
 
 #include "Adafruit_BME280.h"
@@ -42,52 +41,51 @@ SerialLogHandler logHandler(115200, LOG_LEVEL_INFO,
 // External status LED pins
 const uint16_t EXTLED_CLOCK_PIN = (D2);
 const uint16_t EXTLED_DATA_PIN = (D3);
-const uint8_t NUM_EXT_LEDS  = 1;
 
+const uint16_t USER_LED_PIN = (D7);
 
 const uint16_t DUST_SENSOR_PIN = (D4);
 // how long to collect dust readings before recalculating
 const uint32_t DUST_SENSOR_WINDOW_MS  = 10000; 
 
 
-const uint16_t AQS_PIN = (A2);
+const uint16_t AQS_PIN = (A1);
 // Sensor for volatile organic compounds, carbon monoxide, and so on.
 AirQualitySensor voc_sensor(AQS_PIN);
 
 // Air pressure, temperature, humidity sensor
 Adafruit_BME280 pht_sensor;
 
-// Define the digital IO pins used for external LED
-ChainableLED led_chain(EXTLED_CLOCK_PIN, EXTLED_DATA_PIN, NUM_EXT_LEDS);
-
-
-// ultraviolet light sensor
-// Adafruit_VEML6070 uv_sensor;
-
 // in this app we use a Particle webhook to publish data and visualize with ubidots
 Ubidots ubidots((char*)"webhook", UBI_PARTICLE);
 
 
+// PHT sensor readings
 static float last_temp = 0;
 static float last_humidity = 0;
 static float last_airpressure = 0;
 static uint32_t last_pht_read = 0;
-// static uint16_t last_uv = 0;
+
+// dust sensor readings
 static uint32_t last_dust_recalc_ms = 0;
 static uint32_t total_window_lpo = 0;
 static uint32_t last_known_window_lpo = 0;
 static float dust_ratio = 0;
 static float dust_concentration = 0;
 
+// gas sensor readings
 static int32_t last_voc_qual = -1;
 static int32_t last_voc_value = 0;
+static uint32_t last_voc_read = 0;
 
 static SystemSleepConfiguration sleep_cfg = {};
 
 
-/* Function prototypes -------------------------------------------------------*/
-double readTemperature();
-double readHumidity();
+// provide gas level reading
+int readGasLevel(String param) {
+  return (int)last_voc_value;
+}
+
 
 /* This function is called once at start up ----------------------------------*/
 void setup() {
@@ -97,41 +95,29 @@ void setup() {
 
 	ubidots.setDebug(true);
 
+  	pinMode(USER_LED_PIN, OUTPUT);   
+
 	// Configure the dust sensor pin as an input
 	pinMode(DUST_SENSOR_PIN, INPUT);
 
-	if (!pht_sensor.begin()){ 
-		Log.error("BME280 init failed");
-		for (int i = 0; i < 5; i++) {
-			delay(250);
-			if (pht_sensor.begin()) {
-				break;
-			}
+	// it sometimes takes a few tries for the BME280 to init properly
+	for (uint32_t i = 0; i < 5; i++) {
+		if (pht_sensor.begin()) {
+			break;
 		}
+		Log.error("pht_sensor begin failed");
+		delay(250);
 	}
 
 	if (!voc_sensor.init()) {
-		Log.error("aq sensor init failed");
+		Log.error("voc_sensor init failed");
 	}
 
-	// uv_sensor.begin(VEML6070_2_T);
-
-	led_chain.init();
-	
-	// Register all the Tinker functions
-	Particle.variable("readTemperature", readTemperature);
-	Particle.variable("readHumidity", readHumidity);
+	// register a cloud function to allow reading the gas level remotely 
+	Particle.function("gasLevel", readGasLevel);
 
 }
 
-
-double readTemperature() {
-	return (double)last_temp;
-}
-
-double readHumidity() {
-	return (double)last_humidity;
-}
 
 // Read the gas sensor
 static void read_voc_sensor() {
@@ -140,26 +126,24 @@ static void read_voc_sensor() {
 		last_voc_qual = gas_quality;
 		last_voc_value = voc_sensor.getValue();
 		Log.info("voc qual: %ld  val: %ld", last_voc_qual, last_voc_value);
+		last_voc_read = millis();
 	}
 }
 
-// Read ultraviolet light sensor
-// static void read_uv_sensor() {
-// 	uint16_t cur_uv = uv_sensor.readUV();
-// 	if (65535 != cur_uv) { //invalid reading
-// 		last_uv = cur_uv;
-// 	}
-// }
 
 // Read Pressure, Temperature, Humidity sensor
 static void read_pht_sensor() {
-	last_temp =  pht_sensor.readTemperature();
-	last_humidity = pht_sensor.readHumidity();
-	last_airpressure = pht_sensor.readPressure() / 100.0F;
-	last_pht_read = millis();
+	float cur_temp = pht_sensor.readTemperature();
+	if (!isnanf(cur_temp)) {
+		last_temp = cur_temp;
+		last_humidity = pht_sensor.readHumidity();
+		last_airpressure = pht_sensor.readPressure() / 100.0F;
+		last_pht_read = millis();
+	}
+
 }
 
-// Read particulate (dust) sensor
+// Read particulate sensor
 static void read_dust_sensor() {
 	// measure the length of a low pulse
 	uint32_t low_pulse_duration = 0;
@@ -168,7 +152,7 @@ static void read_dust_sensor() {
 
 	// filter out zeros
 	for (uint8_t count = 0; count < 3; count++) {
-		low_pulse_duration = pulseIn(DUST_SENSOR_PIN, LOW);
+		uint32_t low_pulse_duration = pulseIn(DUST_SENSOR_PIN, LOW);
 		if (low_pulse_duration > 0) {
 			total_window_lpo +=   low_pulse_duration;
 			break;
@@ -192,8 +176,6 @@ static void read_dust_sensor() {
 		last_dust_recalc_ms = millis();
 	}
 }
-
-
 
 // control how long we sleep based on data collection and publication config
 static void sleep_control(uint32_t sleep_ms) {
@@ -238,12 +220,16 @@ static void sleep_control(uint32_t sleep_ms) {
 // Send sensor data via Particle.publish to ubidots
 static bool publish_data() {
 	
-	ubidots.add((char*)"temp", last_temp); 
-	ubidots.add((char*)"press", last_airpressure); 
-    ubidots.add((char*)"humidity", last_humidity);
+	if (last_pht_read > 0) {
+		ubidots.add((char*)"temp", last_temp); 
+		ubidots.add((char*)"press", last_airpressure); 
+		ubidots.add((char*)"humidity", last_humidity);
+	}
 	// ubidots.add((char*)"uv", last_uv);
 
-	ubidots.add((char*)"gas",last_voc_value);
+	if (last_voc_read > 0) {
+		ubidots.add((char*)"gas",last_voc_value);
+	}
 
 	if (last_known_window_lpo > 0) {
       ubidots.add((char*)"dust-lpo", last_known_window_lpo);
@@ -252,78 +238,58 @@ static bool publish_data() {
 	}
 
 	
-
 	// Here we use a Particle webhook to send data to Ubidots
 	// This webhook name must match the webhook integration created in your Particle cloud account
- 	return ubidots.send((char*)"ubidota", PUBLIC | WITH_ACK); 
+ 	bool ubi_res = ubidots.send((char*)"ubidota", PUBLIC | WITH_ACK); 
+	 if (!ubi_res) {
+
+	 }
+	 return ubi_res;
 }
 
 /* This function loops forever --------------------------------------------*/
-void loop()
-{
-	// temporarily change color to indicate we're recalculating 
-	led_chain.setColorRGB(0, 0, 2, 0);
+void loop() {
+	digitalWrite(USER_LED_PIN, LOW);
+
 	// connect if we aren't already connected
 	if (!Particle.connected()) {
 		Log.warn("reconnect");
 		Particle.connect(); //start connection
 	}
 
+	// we use the user LED to indicate how long we spend reading sensors and publishing
+	digitalWrite(USER_LED_PIN, HIGH);
+
 	// read_uv_sensor();
-    read_pht_sensor();
+    //read_pht_sensor();
 	read_voc_sensor();
-	read_dust_sensor();
-
-	// display a "health check" status for air quality
-	uint8_t red_val = 0, green_val = 0, blue_val = 0;;
-
-	if (last_voc_qual >= 0) {
-		switch (last_voc_qual) {
-			case 0:
-				red_val = 255;
-				break;
-			case 1:
-				red_val = 128;
-				break;
-			case 2:
-				red_val = 64;
-				break;
-		} 
-	}
-
-	if (last_dust_recalc_ms > 0) {
-		float dust_frac = dust_concentration / 500.0;
-		if (dust_frac > 1.0) dust_frac = 1.0;
-		Log.info("dustfrac: %f", dust_frac);
-		blue_val = (uint8_t)ceilf(255.0 * dust_frac);
-	}
-
-	// pin color to all green if "bad" values are acceptable
-	if ((red_val == 0) && (blue_val < 64)) {
-		green_val = 128;
-		blue_val = 0;
-	}
-		
-	led_chain.setColorRGB(0, red_val, green_val, blue_val);
+	//read_dust_sensor();
 
 	for (int i = 0; i < 30; i++) {
 		if (Particle.connected()) { break; }
 		Log.info("wait... %d",i);
 		delay(1000);
 	}
+
 	if (!Particle.connected()) {
 		// In this app we don't attempt to send data if we can't connect
 		return;
 	}
 
-	if (publish_data()) {
+	bool pub_success = publish_data();
+	digitalWrite(USER_LED_PIN, LOW);
+
+	if (pub_success) {
 		// wait 5 minutes between publications as ubidots are rate-limited
-		sleep_control(300000);
+		//sleep_control(300000);
+		delay(15000);
 	}
 	else {
 		Log.warn("pub failed");
 		delay(2000);
 	}
+	
+	
 }
 
 
