@@ -26,24 +26,19 @@
 
 // Gas sensor
 #include "Air_Quality_Sensor.h"
-// UV sensor
-// #include "Adafruit_VEML6070.h"
+
 
 SYSTEM_THREAD(ENABLED);
 SYSTEM_MODE(SEMI_AUTOMATIC); 
 
-SerialLogHandler logHandler(115200, LOG_LEVEL_INFO,
-    {
-      {"app", LOG_LEVEL_INFO},
-      {"system.nm", LOG_LEVEL_INFO},
-    });
+// Send log output to USB serial 
+SerialLogHandler logHandler(115200, LOG_LEVEL_INFO);
 
-// External status LED pins
-const uint16_t EXTLED_CLOCK_PIN = (D2);
-const uint16_t EXTLED_DATA_PIN = (D3);
 
 const uint16_t USER_LED_PIN = (D7);
 
+// define the following to enable the dust sensor 
+#undef ENABLE_DUST_SENSOR
 const uint16_t DUST_SENSOR_PIN = (D4);
 // how long to collect dust readings before recalculating
 const uint32_t DUST_SENSOR_WINDOW_MS  = 10000; 
@@ -97,8 +92,10 @@ void setup() {
 
   	pinMode(USER_LED_PIN, OUTPUT);   
 
+	#ifdef ENABLE_DUST_SENSOR
 	// Configure the dust sensor pin as an input
 	pinMode(DUST_SENSOR_PIN, INPUT);
+	#endif //ENABLE_DUST_SENSOR
 
 	// it sometimes takes a few tries for the BME280 to init properly
 	for (uint32_t i = 0; i < 5; i++) {
@@ -139,10 +136,12 @@ static void read_pht_sensor() {
 		last_humidity = pht_sensor.readHumidity();
 		last_airpressure = pht_sensor.readPressure() / 100.0F;
 		last_pht_read = millis();
+		Log.info("P %f H %f T %f", last_airpressure, last_humidity, last_temp);
 	}
 
 }
 
+#ifdef ENABLE_DUST_SENSOR
 // Read particulate sensor
 static void read_dust_sensor() {
 	// measure the length of a low pulse
@@ -176,6 +175,8 @@ static void read_dust_sensor() {
 		last_dust_recalc_ms = millis();
 	}
 }
+
+#endif //ENABLE_DUST_SENSOR
 
 // control how long we sleep based on data collection and publication config
 static void sleep_control(uint32_t sleep_ms) {
@@ -231,11 +232,13 @@ static bool publish_data() {
 		ubidots.add((char*)"gas",last_voc_value);
 	}
 
+	#ifdef ENABLE_DUST_SENSOR
 	if (last_known_window_lpo > 0) {
       ubidots.add((char*)"dust-lpo", last_known_window_lpo);
       ubidots.add((char*)"dust-ratio", dust_ratio);
       ubidots.add((char*)"dust-concentration", dust_concentration);
 	}
+	#endif //ENABLE_DUST_SENSOR
 
 	
 	// Here we use a Particle webhook to send data to Ubidots
@@ -251,27 +254,29 @@ static bool publish_data() {
 void loop() {
 	digitalWrite(USER_LED_PIN, LOW);
 
-	// connect if we aren't already connected
-	if (!Particle.connected()) {
-		Log.warn("reconnect");
-		Particle.connect(); //start connection
-	}
+	// // connect if we aren't already connected
+	// if (!Particle.connected()) {
+	// 	Log.warn("reconnect");
+	// 	Particle.connect(); //start connection
+	// }
 
 	// we use the user LED to indicate how long we spend reading sensors and publishing
 	digitalWrite(USER_LED_PIN, HIGH);
 
-	// read_uv_sensor();
-    //read_pht_sensor();
+    read_pht_sensor();
 	read_voc_sensor();
-	//read_dust_sensor();
+	#ifdef ENABLE_DUST_SENSOR
+	read_dust_sensor();
+	#endif //ENABLE_DUST_SENSOR
 
-	for (int i = 0; i < 30; i++) {
-		if (Particle.connected()) { break; }
-		Log.info("wait... %d",i);
-		delay(1000);
-	}
+	// for (int i = 0; i < 30; i++) {
+	// 	if (Particle.connected()) { break; }
+	// 	Log.info("wait... %d",i);
+	// 	delay(1000);
+	// }
 
 	if (!Particle.connected()) {
+		delay(1000);
 		// In this app we don't attempt to send data if we can't connect
 		return;
 	}
