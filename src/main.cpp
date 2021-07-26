@@ -38,6 +38,9 @@ SerialLogHandler logHandler(115200, LOG_LEVEL_INFO);
 const uint16_t USER_LED_PIN = (D7);
 
 // define the following to enable the dust sensor 
+// Note that the dust sensor requires significant power, so you 
+// may need to connect a battery to the Particle device (in addition to USB)
+// Or use eg the 12 VDC barrel input on the M.2 SOM eval board.
 #undef ENABLE_DUST_SENSOR
 const uint16_t DUST_SENSOR_PIN = (D4);
 // how long to collect dust readings before recalculating
@@ -226,7 +229,6 @@ static bool publish_data() {
 		ubidots.add((char*)"press", last_airpressure); 
 		ubidots.add((char*)"humidity", last_humidity);
 	}
-	// ubidots.add((char*)"uv", last_uv);
 
 	if (last_voc_read > 0) {
 		ubidots.add((char*)"gas",last_voc_value);
@@ -245,7 +247,7 @@ static bool publish_data() {
 	// This webhook name must match the webhook integration created in your Particle cloud account
  	bool ubi_res = ubidots.send((char*)"ubidota", PUBLIC | WITH_ACK); 
 	 if (!ubi_res) {
-
+		 Log.warn("publish failed");
 	 }
 	 return ubi_res;
 }
@@ -254,11 +256,11 @@ static bool publish_data() {
 void loop() {
 	digitalWrite(USER_LED_PIN, LOW);
 
-	// // connect if we aren't already connected
-	// if (!Particle.connected()) {
-	// 	Log.warn("reconnect");
-	// 	Particle.connect(); //start connection
-	// }
+	// connect if we aren't already connected
+	if (!Particle.connected()) {
+		Log.warn("reconnect");
+		Particle.connect(); //start connection
+	}
 
 	// we use the user LED to indicate how long we spend reading sensors and publishing
 	digitalWrite(USER_LED_PIN, HIGH);
@@ -269,11 +271,11 @@ void loop() {
 	read_dust_sensor();
 	#endif //ENABLE_DUST_SENSOR
 
-	// for (int i = 0; i < 30; i++) {
-	// 	if (Particle.connected()) { break; }
-	// 	Log.info("wait... %d",i);
-	// 	delay(1000);
-	// }
+	for (int i = 0; i < 30; i++) {
+		if (Particle.connected()) { break; }
+		Log.info("wait... %d",i);
+		delay(1000);
+	}
 
 	if (!Particle.connected()) {
 		delay(1000);
@@ -286,8 +288,7 @@ void loop() {
 
 	if (pub_success) {
 		// wait 5 minutes between publications as ubidots are rate-limited
-		//sleep_control(300000);
-		delay(15000);
+		sleep_control(300000);
 	}
 	else {
 		Log.warn("pub failed");
