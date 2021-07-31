@@ -4,32 +4,39 @@ A Particle project named sloris.
 
 This project demonstrates how to do battery-conserving remote condition monitoring. 
 The application sleeps periodically, waking up via the real time clock (RTC) 
-or via remote (cloud) polling 
-of one of its sensor values. 
+or via remote (cloud) polling of one of its sensor values. 
 
-## Cloud Build with the Particle CLI
 
-You can use the command-line 
-[Particle CLI](https://docs.particle.io/tutorials/developer-tools/cli/)
-to perform a cloud build of the application
- 
+### To Build & Flash with Particle Workbench (vscode)
+
+This application may be built with Device OS version 2.1.0.
+
+1. Clone this repository 
+2. Init & Update Submodules `git submodule update --init --recursive`
+3. Open Particle Workbench
+4. Run the `Particle: Import Project` command, follow the prompts, to select this project's `project.properties` file and wait for the project to load
+5. Run the `Particle: Configure Workspace for Device` command and select a compatible Device OS version and the `boron` platform when prompted ([docs](https://docs.particle.io/tutorials/developer-tools/workbench/#cloud-build-and-flash))
+6. Connect your boron to your computer with a usb cable
+7. Compile & Flash using Workbench
+
+
+### To Build & Flash with Particle CLI
+
+This application may be built with Device OS version 2.1.0.
+
+1. Clone this repository 
+2. Init & Update Submodules `git submodule update --init --recursive`
+3. Cloud build (for Tracker) with CLI :
 `particle compile --target 2.1.0 boron --saveTo sloris_boron.bin`
 
-You can also use the CLI to flash the device using dfu:
+4. Connect your Tracker to your computer with a usb cable
+5. Use the CLI to flash the device using dfu:
 
 ```
 particle usb dfu
 particle flash --usb sloris_boron.bin
 ```
 
-## Import into a Workbench Project
-
-You can edit, build, flash, and debug this project with .
-[Particle Workbench](https://docs.particle.io/tutorials/developer-tools/workbench/)
-Use the `Particle: Import Project` command in a Workbench window,
-Open -> and select the `project.properties` file in the same directory as this README.
-This will create a new vscode project and automatically import all of this
-project's dependencies into `/lib`. 
 
 ## Project structure
 
