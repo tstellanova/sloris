@@ -17,7 +17,10 @@ to perform a cloud build of the application
 
 You can also use the CLI to flash the device using dfu:
 
-`particle usb dfu && particle flash --usb sloris_boron.bin`
+```
+particle usb dfu
+particle flash --usb sloris_boron.bin
+```
 
 ## Import into a Workbench Project
 
