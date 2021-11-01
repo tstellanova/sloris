@@ -198,7 +198,7 @@ static void collect_phtg_sensor() {
 		last_airpressure = phtg_sensor.pressure;
 		last_humidity = phtg_sensor.humidity;
 		last_temp = phtg_sensor.temperature;
-		last_voc_value =  (int32_t)(phtg_sensor.gas_resistance / 1000.0);
+		last_voc_value =  (int32_t)phtg_sensor.gas_resistance;
 		// TODO use readAltitude ?
 		last_phtg_read = cur_millis;
 	}
