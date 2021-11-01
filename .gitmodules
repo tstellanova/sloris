@@ -19,3 +19,9 @@
 [submodule "lib/pm25aqi"]
 	path = lib/pm25aqi
 	url = https://github.com/adafruit/Adafruit_PM25AQI
+[submodule "lib/ada_busio/src"]
+	path = lib/ada_busio/src
+	url = https://github.com/adafruit/Adafruit_BusIO
+[submodule "lib/ada_sensor/src"]
+	path = lib/ada_sensor/src
+	url = https://github.com/adafruit/Adafruit_Sensor
