@@ -1,6 +1,3 @@
-[submodule "lib/Ubidots"]
-	path = lib/Ubidots
-	url = https://github.com/ubidots/ubidots-particle
 [submodule "lib/Grove_ChainableLED"]
 	path = lib/Grove_ChainableLED
 	url = https://github.com/Seeed-Studio/Grove_ChainableLED

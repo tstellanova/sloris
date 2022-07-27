@@ -20,7 +20,7 @@
  */
 #include <Particle.h>
 
-#include "Ubidots.h"
+// #include "Ubidots.h"
 
 //  Pressure Humidity Temperature Gas PHTG sensor
 #include "Adafruit_BME680.h"
@@ -32,6 +32,10 @@
 // UV sensor
 // #include "Adafruit_VEML6070.h"
 
+// micro SD card logger
+#include "SdCardLogHandlerRK.h"
+#include "AdafruitDataLoggerRK.h"
+
 SYSTEM_THREAD(ENABLED);
 SYSTEM_MODE(SEMI_AUTOMATIC); 
 
@@ -41,11 +45,23 @@ SerialLogHandler logHandler(115200, LOG_LEVEL_INFO,
       {"system.nm", LOG_LEVEL_INFO},
     });
 
+
+
+// RTC
+RTCSynchronizer rtcSync;
+
+// The SD card CS pin on the Adafruit AdaLogger FeatherWing is D5.
+const int SDLOG_CHIP_SELECT = D5;
+SdFat sd_fat;
+SdCardPrintHandler printToCard(sd_fat, SDLOG_CHIP_SELECT, SPI_FULL_SPEED);
+
+
+
 // External status LED pins
 const uint16_t EXTLED_CLOCK_PIN = (D2);
 const uint16_t EXTLED_DATA_PIN = (D3);
 
-const uint16_t USER_LED_PIN = (D7);
+// const uint16_t USER_LED_PIN = (D7);
 
 // const uint16_t DUST_SENSOR_PIN = (D4);
 // how long to collect dust readings before recalculating
@@ -62,7 +78,7 @@ Adafruit_PM25AQI pm25_sensor;
 Adafruit_BME680 phtg_sensor;
 
 // in this app we use a Particle webhook to publish data and visualize with ubidots
-Ubidots ubidots((char*)"webhook", UBI_PARTICLE);
+// Ubidots ubidots((char*)"webhook", UBI_PARTICLE);
 
 
 // PHTG sensor readings
@@ -77,6 +93,9 @@ static uint32_t last_phtg_read = 0;
 static uint32_t last_dust_recalc_ms = 0;
 static uint32_t total_window_lpo = 0;
 static uint32_t last_known_window_lpo = 0;
+static uint16_t last_particle_03 = 0;
+static uint16_t last_particle_05 = 0;
+static uint16_t last_particle_10 = 0;
 static float dust_ratio = 0;
 static float dust_concentration = 0;
 
@@ -133,10 +152,11 @@ void setup() {
 	// allow some time for serial usb to start 
 	delay(3000);
 
+	rtcSync.setup();
 
-	ubidots.setDebug(true);
+	// ubidots.setDebug(true);
 
-  	pinMode(USER_LED_PIN, OUTPUT);   
+  	// pinMode(USER_LED_PIN, OUTPUT);   
 	setupPHTGSensor();
 	setupDustSensor();
 
@@ -159,8 +179,32 @@ static void read_pm25_sensor() {
   
 	if (pm25_sensor.read(&data)) {
 		last_dust_recalc_ms = millis();
-		// dust_ratio = data.pm25_standard;
-		last_known_window_lpo = (uint32_t)data.pm25_standard;
+		// char dump_buf[42] = {};
+		// memcpy((void*)dump_buf,(const void*)&data, sizeof(data));
+		// for (int i = 0; i < 32; i += 4) {
+		// 	Log.info("%02x %02x %02x %02x \n",
+		// 	dump_buf[i], dump_buf[i+1], dump_buf[i+2], dump_buf[i+3]);
+		// }
+		
+
+		// Log.info("\n pm10: %d %d \n pm25: %d %d\npm100: %d %d",
+		// 	data.pm10_env, data.pm10_standard,
+		// 	data.pm25_env, data.pm25_standard,
+		// 	data.pm100_env, data.pm100_standard
+		// );
+		// Log.info("micros 03 %d 05 %d 10 %d 25 %d 50 %d 100 %d ",
+		// 	data.particles_03um,
+		// 	data.particles_05um,
+		// 	data.particles_10um,
+		// 	data.particles_25um,
+		// 	data.particles_50um,
+		// 	data.particles_100um
+		// );
+		// last_particle_03 = data.particles_03um;
+		// last_particle_05 = data.particles_05um;
+		// last_particle_10 = data.particles_10um;
+		
+		// last_known_window_lpo = (uint32_t)data.particles_03um;
 	}
 	else {
 		Log.info("PM 2.5 sensor not ready");
@@ -253,7 +297,7 @@ static void sleep_control(uint32_t sleep_ms) {
     .duration(sleep_ms); //ms
   
   uint32_t sleep_start = millis();
-  Log.info("sleep %lu ms", sleep_ms);
+  //Log.info("sleep %lu ms", sleep_ms);
   SystemSleepResult sleep_res = System.sleep(sleep_cfg);
   SystemSleepWakeupReason wake_reason = sleep_res.wakeupReason();
   uint32_t sleep_actual = millis() - sleep_start;
@@ -283,38 +327,29 @@ static void sleep_control(uint32_t sleep_ms) {
 
 // Send sensor data via Particle.publish to ubidots
 static bool publish_data() {
-	
-	if (last_phtg_read > 0) {
-		ubidots.add((char*)"press", last_airpressure); 
-		ubidots.add((char*)"humidity", last_humidity);
-		ubidots.add((char*)"temp", last_temp); 
-		ubidots.add((char*)"gas",last_voc_value);
-	}
-	// ubidots.add((char*)"uv", last_uv);
+	char pub_buf[256] = {};
 
-	// if (last_voc_read > 0) {
-	// 	ubidots.add((char*)"gas",last_voc_value);
-	// }
+	sprintf(pub_buf,"{ \"press\": %0.2f, \"humid\": %0.2f, \"temp\": %0.2f, \"voc\": %lu, \"3um\": %u,\"5um\": %u, \"10um\": %u }",
+		last_airpressure,
+		last_humidity,
+		last_temp,
+		last_voc_value,
+		last_particle_03,
+		last_particle_05,
+		last_particle_10
+	);
 
-	if (last_known_window_lpo > 0) {
-      ubidots.add((char*)"dust-lpo", last_known_window_lpo);
-      //ubidots.add((char*)"dust-ratio", dust_ratio);
-      //ubidots.add((char*)"dust-concentration", dust_concentration);
-	}
+	Log.info("sending: %s", pub_buf);
+	printToCard.printlnf(pub_buf);
 
-	
-	// Here we use a Particle webhook to send data to Ubidots
-	// This webhook name must match the webhook integration created in your Particle cloud account
- 	bool ubi_res = ubidots.send((char*)"ubidota", PUBLIC | WITH_ACK); 
-	 if (!ubi_res) {
+	return Particle.publish("wonk",pub_buf,WITH_ACK);
 
-	 }
-	 return ubi_res;
+
 }
 
 /* This function loops forever --------------------------------------------*/
 void loop() {
-	digitalWrite(USER_LED_PIN, LOW);
+	// digitalWrite(USER_LED_PIN, LOW);
 
 	// connect if we aren't already connected
 	if (!Particle.connected()) {
@@ -323,7 +358,7 @@ void loop() {
 	}
 
 	// we use the user LED to indicate how long we spend reading sensors and publishing
-	digitalWrite(USER_LED_PIN, HIGH);
+	// digitalWrite(USER_LED_PIN, HIGH);
 
 	// read_uv_sensor();
     collect_phtg_sensor();
@@ -344,11 +379,11 @@ void loop() {
 	}
 
 	bool pub_success = publish_data();
-	digitalWrite(USER_LED_PIN, LOW);
+	// digitalWrite(USER_LED_PIN, LOW);
 
 	if (pub_success) {
-		// wait 5 minutes between publications as ubidots are rate-limited
-		//sleep_control(300000);
+		// wait 5 minutes between publications 
+		// sleep_control(300000);
 		delay(15000);
 	}
 	else {
@@ -356,6 +391,8 @@ void loop() {
 		delay(2000);
 	}
 	
+	rtcSync.loop();
+
 	
 }
 
