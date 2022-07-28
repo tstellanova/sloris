@@ -97,11 +97,11 @@ static uint32_t last_phtg_read = 0;
 
 // dust sensor readings
 static uint32_t last_dust_recalc_ms = 0;
-static uint32_t total_window_lpo = 0;
-static uint32_t last_known_window_lpo = 0;
-static uint16_t last_particle_03 = 0;
-static uint16_t last_particle_05 = 0;
-static uint16_t last_particle_10 = 0;
+// static uint32_t total_window_lpo = 0;
+// static uint32_t last_known_window_lpo = 0;
+
+static PM25_AQI_Data last_pm25_data;
+
 static float dust_ratio = 0;
 static float dust_concentration = 0;
 
@@ -155,8 +155,11 @@ static bool setupPHTGSensor() {
 /* This function is called once at start up ----------------------------------*/
 void setup() {
     Serial.begin();
+	display.begin(0x3C, true); // Address 0x3C default
+ 	display.display();
+
 	// allow some time for serial usb to start 
-	delay(3000);
+	//delay(3000);
 
 	rtcSync.setup();
 
@@ -176,9 +179,9 @@ void setup() {
 	// register a cloud function to allow reading the gas level remotely 
 	Particle.function("gasLevel", readGasLevel);
 
-    display.begin(0x3C, true); // Address 0x3C default
- 	display.display();
     display.clearDisplay();
+  	display.setRotation(1);
+
 
 }
 
@@ -188,33 +191,8 @@ static void read_pm25_sensor() {
 	PM25_AQI_Data data;
   
 	if (pm25_sensor.read(&data)) {
-		last_dust_recalc_ms = millis();
-		// char dump_buf[42] = {};
-		// memcpy((void*)dump_buf,(const void*)&data, sizeof(data));
-		// for (int i = 0; i < 32; i += 4) {
-		// 	Log.info("%02x %02x %02x %02x \n",
-		// 	dump_buf[i], dump_buf[i+1], dump_buf[i+2], dump_buf[i+3]);
-		// }
-		
-
-		// Log.info("\n pm10: %d %d \n pm25: %d %d\npm100: %d %d",
-		// 	data.pm10_env, data.pm10_standard,
-		// 	data.pm25_env, data.pm25_standard,
-		// 	data.pm100_env, data.pm100_standard
-		// );
-		// Log.info("micros 03 %d 05 %d 10 %d 25 %d 50 %d 100 %d ",
-		// 	data.particles_03um,
-		// 	data.particles_05um,
-		// 	data.particles_10um,
-		// 	data.particles_25um,
-		// 	data.particles_50um,
-		// 	data.particles_100um
-		// );
-		// last_particle_03 = data.particles_03um;
-		// last_particle_05 = data.particles_05um;
-		// last_particle_10 = data.particles_10um;
-		
-		// last_known_window_lpo = (uint32_t)data.particles_03um;
+		memcpy((void*)&last_pm25_data, (void*)&data,sizeof(last_pm25_data));
+		last_dust_recalc_ms = millis();	
 	}
 	else {
 		Log.info("PM 2.5 sensor not ready");
@@ -344,9 +322,9 @@ static bool publish_data() {
 		last_humidity,
 		last_temp,
 		last_voc_value,
-		last_particle_03,
-		last_particle_05,
-		last_particle_10
+		last_pm25_data.particles_03um,
+		last_pm25_data.particles_05um,
+		last_pm25_data.particles_10um
 	);
 
 	Log.info("sending: %s", pub_buf);
@@ -358,13 +336,40 @@ static bool publish_data() {
 
 static void display_data() {
 	char buf[32] = {};
-	sprintf(buf,"%0.2f C ,  %0.2f %% ", last_temp, last_humidity);
+    display.clearDisplay();
 
-  display.setTextSize(1);
-  display.setTextColor(SH110X_WHITE);
-  display.setCursor(0,0);
-  display.println(buf);
-  display.display(); // actually display all of the above
+	display.setTextSize(1);
+	display.setTextColor(SH110X_WHITE);
+	display.setCursor(0,0);
+	sprintf(buf,"%0.2f C,  %0.2f %% ", last_temp, last_humidity);
+	display.println(buf); //renders line and moves down one line in height
+	display.println("");
+
+	display.setTextSize(2);
+	display.setTextColor(SH110X_BLACK);
+
+	int16_t x1, y1;
+	uint16_t text_w, text_h; 
+	// if (last_pm25_data.particles_10um > 0) {
+		sprintf(buf," %d",last_pm25_data.particles_10um);
+		display.getTextBounds(buf, display.getCursorX(), display.getCursorY(), &x1, &y1, &text_w, &text_h);
+		display.fillRoundRect(x1, y1, 128, text_h,  8, SH110X_WHITE);
+		display.println(buf);
+	// }
+	// if (last_pm25_data.particles_05um > 0) {
+		sprintf(buf," %d",last_pm25_data.particles_05um);
+		display.getTextBounds(buf, display.getCursorX(), display.getCursorY(), &x1, &y1, &text_w, &text_h);
+		display.fillRoundRect(x1, y1, 128, text_h,  8, SH110X_WHITE);
+		display.println(buf);
+	// }
+	// if (last_pm25_data.particles_03um > 0) {
+		sprintf(buf," %d", last_pm25_data.particles_03um);
+		display.getTextBounds(buf, display.getCursorX(), display.getCursorY(), &x1, &y1, &text_w, &text_h);
+		display.fillRoundRect(x1, y1, 128, text_h,  8, SH110X_WHITE);
+		display.println(buf);
+	// }
+
+	display.display(); // actually display all of the above
 }
 
 /* This function loops forever --------------------------------------------*/
