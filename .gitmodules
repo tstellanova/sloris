@@ -22,3 +22,6 @@
 [submodule "lib/ada_sensor/src"]
 	path = lib/ada_sensor/src
 	url = https://github.com/adafruit/Adafruit_Sensor
+[submodule "lib/Adafruit_SH110x"]
+	path = lib/Adafruit_SH110x
+	url = https://github.com/tstellanova/Adafruit_SH110x
