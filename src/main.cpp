@@ -20,7 +20,7 @@
  */
 #include <Particle.h>
 
-// #include "Ubidots.h"
+
 
 //  Pressure Humidity Temperature Gas PHTG sensor
 #include "Adafruit_BME680.h"
@@ -35,6 +35,10 @@
 // micro SD card logger
 #include "SdCardLogHandlerRK.h"
 #include "AdafruitDataLoggerRK.h"
+
+// OLED display
+#include "Adafruit_SH110X.h"
+
 
 SYSTEM_THREAD(ENABLED);
 SYSTEM_MODE(SEMI_AUTOMATIC); 
@@ -56,6 +60,8 @@ SdFat sd_fat;
 SdCardPrintHandler printToCard(sd_fat, SDLOG_CHIP_SELECT, SPI_FULL_SPEED);
 
 
+//OLED display
+Adafruit_SH1107 display = Adafruit_SH1107(64, 128, &Wire);
 
 // External status LED pins
 const uint16_t EXTLED_CLOCK_PIN = (D2);
@@ -169,6 +175,10 @@ void setup() {
 
 	// register a cloud function to allow reading the gas level remotely 
 	Particle.function("gasLevel", readGasLevel);
+
+    display.begin(0x3C, true); // Address 0x3C default
+ 	display.display();
+    display.clearDisplay();
 
 }
 
@@ -344,7 +354,17 @@ static bool publish_data() {
 
 	return Particle.publish("wonk",pub_buf,WITH_ACK);
 
+}
 
+static void display_data() {
+	char buf[32] = {};
+	sprintf(buf,"%0.2f C ,  %0.2f %% ", last_temp, last_humidity);
+
+  display.setTextSize(1);
+  display.setTextColor(SH110X_WHITE);
+  display.setCursor(0,0);
+  display.println(buf);
+  display.display(); // actually display all of the above
 }
 
 /* This function loops forever --------------------------------------------*/
@@ -380,7 +400,8 @@ void loop() {
 
 	bool pub_success = publish_data();
 	// digitalWrite(USER_LED_PIN, LOW);
-
+	display_data();
+	
 	if (pub_success) {
 		// wait 5 minutes between publications 
 		// sleep_control(300000);
