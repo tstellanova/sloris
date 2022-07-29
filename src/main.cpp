@@ -39,10 +39,6 @@
 // OLED display
 #include "Adafruit_SH110X.h"
 
-// Grove chainable LED
-#include "ChainableLED.h"
-
-
 SYSTEM_THREAD(ENABLED);
 SYSTEM_MODE(SEMI_AUTOMATIC); 
 
