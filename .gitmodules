@@ -19,3 +19,6 @@
 [submodule "lib/SdCardLogHandlerRK"]
 	path = lib/SdCardLogHandlerRK
 	url = https://github.com/rickkas7/SdCardLogHandlerRK
+[submodule "lib/AdafruitDataLoggerRK"]
+	path = lib/AdafruitDataLoggerRK
+	url = https://github.com/rickkas7/AdafruitDataLoggerRK
