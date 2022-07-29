@@ -39,6 +39,9 @@
 // OLED display
 #include "Adafruit_SH110X.h"
 
+// Grove chainable LED
+#include "ChainableLED.h"
+
 
 SYSTEM_THREAD(ENABLED);
 SYSTEM_MODE(SEMI_AUTOMATIC); 
@@ -102,8 +105,8 @@ static uint32_t last_dust_recalc_ms = 0;
 
 static PM25_AQI_Data last_pm25_data;
 
-static float dust_ratio = 0;
-static float dust_concentration = 0;
+// static float dust_ratio = 0;
+// static float dust_concentration = 0;
 
 // // gas sensor readings
 // static int32_t last_voc_qual = -1;
@@ -349,7 +352,7 @@ static void display_data() {
 	display.setTextSize(1);
 	display.setTextColor(SH110X_WHITE);
 	display.setCursor(0,0);
-	sprintf(buf,"%0.1fC %0.1f%% %d", last_temp, last_humidity, last_voc_value);
+	sprintf(buf,"%0.1fC %0.1f%% %d", last_temp, last_humidity, (int)last_voc_value);
 	display.println(buf); //renders line and moves down one line in height
 	display.println("");
 
