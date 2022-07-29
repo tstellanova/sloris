@@ -13,3 +13,6 @@
 [submodule "lib/Adafruit_SH110x"]
 	path = lib/Adafruit_SH110x
 	url = https://github.com/tstellanova/Adafruit_SH110x
+[submodule "lib/pmiSensor"]
+	path = lib/pmiSensor
+	url = https://github.com/tstellanova/Adafruit_PM25AQI
