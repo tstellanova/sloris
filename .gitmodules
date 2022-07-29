@@ -1,15 +1,24 @@
-[submodule "lib/Ubidots"]
-	path = lib/Ubidots
-	url = https://github.com/ubidots/ubidots-particle
-[submodule "lib/Grove_ChainableLED"]
-	path = lib/Grove_ChainableLED
-	url = https://github.com/Seeed-Studio/Grove_ChainableLED
-[submodule "lib/bme280"]
-	path = lib/bme280
-	url = https://github.com/mhaack/Adafruit_BME280_Library
-[submodule "lib/grove_aq"]
-	path = lib/grove_aq
-	url = https://github.com/bsatrom/Grove_Air_quality_Sensor
-[submodule "lib/veml6070"]
-	path = lib/veml6070
-	url = https://github.com/tstellanova/Adafruit_VEML6070
+[submodule "lib/bme680"]
+	path = lib/bme680
+	url = https://github.com/tstellanova/Adafruit_BME680 
+[submodule "lib/ada_busio/src"]
+	path = lib/ada_busio/src
+	url = https://github.com/adafruit/Adafruit_BusIO
+[submodule "lib/ada_sensor/src"]
+	path = lib/ada_sensor/src
+	url = https://github.com/adafruit/Adafruit_Sensor
+[submodule "lib/Adafruit_SH110x"]
+	path = lib/Adafruit_SH110x
+	url = https://github.com/tstellanova/Adafruit_SH110x
+[submodule "lib/pmiSensor"]
+	path = lib/pmiSensor
+	url = https://github.com/tstellanova/Adafruit_PM25AQI
+[submodule "lib/Adafruit_RTClib_RK"]
+	path = lib/Adafruit_RTClib_RK
+	url = https://github.com/tstellanova/Adafruit_RTClib_RK
+[submodule "lib/SdCardLogHandlerRK"]
+	path = lib/SdCardLogHandlerRK
+	url = https://github.com/rickkas7/SdCardLogHandlerRK
+[submodule "lib/AdafruitDataLoggerRK"]
+	path = lib/AdafruitDataLoggerRK
+	url = https://github.com/rickkas7/AdafruitDataLoggerRK
