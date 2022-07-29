@@ -193,6 +193,14 @@ static void read_pm25_sensor() {
 	if (pm25_sensor.read(&data)) {
 		memcpy((void*)&last_pm25_data, (void*)&data,sizeof(last_pm25_data));
 		last_dust_recalc_ms = millis();	
+		Log.info("Concentration Units (standard)");
+		Log.info("PM 1.0: %d" , data.pm10_standard);
+		Log.info("PM 2.5: %d", data.pm25_standard);
+		Log.info("PM 10: %d",data.pm100_standard);
+		Log.info("Concentration Units (environmental)");
+		Log.info("PM 1.0: %d", data.pm10_env);
+		Log.info("PM 2.5: %d",data.pm25_env);
+		Log.info("PM 10: %d", data.pm100_env);
 	}
 	else {
 		Log.info("PM 2.5 sensor not ready");
@@ -330,7 +338,7 @@ static bool publish_data() {
 	Log.info("sending: %s", pub_buf);
 	printToCard.printlnf(pub_buf);
 
-	return Particle.publish("wonk",pub_buf,WITH_ACK);
+	return Particle.publish("keen_io",pub_buf,WITH_ACK);
 
 }
 
@@ -341,7 +349,7 @@ static void display_data() {
 	display.setTextSize(1);
 	display.setTextColor(SH110X_WHITE);
 	display.setCursor(0,0);
-	sprintf(buf,"%0.2f C,  %0.2f %% ", last_temp, last_humidity);
+	sprintf(buf,"%0.1fC %0.1f%% %d", last_temp, last_humidity, last_voc_value);
 	display.println(buf); //renders line and moves down one line in height
 	display.println("");
 
@@ -349,23 +357,32 @@ static void display_data() {
 	display.setTextColor(SH110X_BLACK);
 
 	int16_t x1, y1;
-	uint16_t text_w, text_h; 
+	uint16_t text_w, text_h, graph_width, min_graph_width;
 	// if (last_pm25_data.particles_10um > 0) {
 		sprintf(buf," %d",last_pm25_data.particles_10um);
 		display.getTextBounds(buf, display.getCursorX(), display.getCursorY(), &x1, &y1, &text_w, &text_h);
-		display.fillRoundRect(x1, y1, 128, text_h,  8, SH110X_WHITE);
+		min_graph_width = text_w + 16; //text width plus twice radius
+		graph_width = (128 * last_pm25_data.particles_10um) / 100;
+		if (graph_width < min_graph_width) graph_width = min_graph_width;
+		display.fillRoundRect(x1, y1, graph_width, text_h,  8, SH110X_WHITE);
 		display.println(buf);
 	// }
 	// if (last_pm25_data.particles_05um > 0) {
 		sprintf(buf," %d",last_pm25_data.particles_05um);
 		display.getTextBounds(buf, display.getCursorX(), display.getCursorY(), &x1, &y1, &text_w, &text_h);
-		display.fillRoundRect(x1, y1, 128, text_h,  8, SH110X_WHITE);
+		min_graph_width = text_w + 16; //text width plus twice radius
+		graph_width = (128 * last_pm25_data.particles_10um) / 100;
+		if (graph_width < min_graph_width) graph_width = min_graph_width;
+		display.fillRoundRect(x1, y1, graph_width, text_h,  8, SH110X_WHITE);
 		display.println(buf);
 	// }
 	// if (last_pm25_data.particles_03um > 0) {
 		sprintf(buf," %d", last_pm25_data.particles_03um);
 		display.getTextBounds(buf, display.getCursorX(), display.getCursorY(), &x1, &y1, &text_w, &text_h);
-		display.fillRoundRect(x1, y1, 128, text_h,  8, SH110X_WHITE);
+		min_graph_width = text_w + 16; //text width plus twice radius
+		graph_width = (128 * last_pm25_data.particles_10um) / 100;
+		if (graph_width < min_graph_width) graph_width = min_graph_width;
+		display.fillRoundRect(x1, y1, graph_width, text_h,  8, SH110X_WHITE);
 		display.println(buf);
 	// }
 
