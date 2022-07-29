@@ -15,7 +15,7 @@
 	url = https://github.com/tstellanova/Adafruit_PM25AQI
 [submodule "lib/Adafruit_RTClib_RK"]
 	path = lib/Adafruit_RTClib_RK
-	url = https://github.com/rickkas7/Adafruit_RTClib_RK
+	url = https://github.com/tstellanova/Adafruit_RTClib_RK
 [submodule "lib/SdCardLogHandlerRK"]
 	path = lib/SdCardLogHandlerRK
 	url = https://github.com/rickkas7/SdCardLogHandlerRK
