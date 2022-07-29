@@ -13,9 +13,6 @@
 [submodule "lib/pmiSensor"]
 	path = lib/pmiSensor
 	url = https://github.com/tstellanova/Adafruit_PM25AQI
-[submodule "lib/AdafruitDataLoggerRK"]
-	path = lib/AdafruitDataLoggerRK
-	url = https://github.com/rickkas7/AdafruitDataLoggerRK
 [submodule "lib/Adafruit_RTClib_RK"]
 	path = lib/Adafruit_RTClib_RK
 	url = https://github.com/rickkas7/Adafruit_RTClib_RK
