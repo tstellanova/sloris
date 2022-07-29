@@ -16,3 +16,6 @@
 [submodule "lib/AdafruitDataLoggerRK"]
 	path = lib/AdafruitDataLoggerRK
 	url = https://github.com/rickkas7/AdafruitDataLoggerRK
+[submodule "lib/Adafruit_RTClib_RK"]
+	path = lib/Adafruit_RTClib_RK
+	url = https://github.com/rickkas7/Adafruit_RTClib_RK
