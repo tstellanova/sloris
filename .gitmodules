@@ -3,7 +3,7 @@
 	url = https://github.com/Seeed-Studio/Grove_ChainableLED
 [submodule "lib/bme680"]
 	path = lib/bme680
-	url = https://github.com/adafruit/Adafruit_BME680
+	url = https://github.com/tstellanova/Adafruit_BME680 
 [submodule "lib/ada_busio/src"]
 	path = lib/ada_busio/src
 	url = https://github.com/adafruit/Adafruit_BusIO
